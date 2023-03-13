@@ -1,49 +1,31 @@
-from flask import Flask, render_template, request, redirect, url_for
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///home_library.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
+from flask import jsonify, request
 
 
-@app.route('/')
-def index():
-    books = Book.query.all()
-    return render_template('index.html', books=books)
-
-@app.route('/book/add', methods=['GET', 'POST'])
+@app.route('/books', methods=['POST'])
 def add_book():
-    if request.method == 'POST':
-        title = request.form['title']
-        publication_date = request.form['publication_date']
-        book = Book(title=title, publication_date=publication_date)
-        db.session.add(book)
-        db.session.commit()
-        return redirect(url_for('index'))
-    return render_template('add_book.html')
+    title = request.json.get('title')
+    author_ids = request.json.get('authors', [])
+    book = Book(title=title)
+    for author_id in author_ids:
+        author = Author.query.get(author_id)
+        book.authors.append(author)
+    db.session.add(book)
+    db.session.commit()
+    return jsonify({'success': True, 'message': 'Book added successfully.'}), 201
 
-@app.route('/author/add', methods=['GET', 'POST'])
-def add_author():
-    if request.method == 'POST':
-        name = request.form['name']
-        author = Author(name=name)
-        db.session.add(author)
-        db.session.commit()
-        return redirect(url_for('index'))
-    return render_template('add_author.html')
+@app.route('/books', methods=['GET'])
+def get_books():
+    books = Book.query.all()
+    return jsonify({'success': True, 'data': [{'id': book.id, 'title': book.title, 'is_on_shelf': book.is_on_shelf} for book in books]}), 200
 
-@app.route('/book/<int:id>/edit', methods=['GET', 'POST'])
-def edit_book(id):
-    book = Book.query.get(id)
-    if request.method == 'POST':
-        book.title = request.form['title']
-        book.publication_date = request.form['publication_date']
-        db.session.commit()
-        return redirect(url_for('index '))
+@app.route('/books/<int:book_id>', methods=['DELETE'])
+def delete_book(book_id):
+    book = Book.query.get(book_id)
+    if not book:
+        return jsonify({'success': False, 'message': 'Book not found.'}), 404
+    db.session.delete(book)
+    db.session.commit()
+    return jsonify({'success': True, 'message': 'Book deleted successfully.'}), 200
 
 
 if __name__ == "__main__":
